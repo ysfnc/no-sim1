@@ -101,9 +101,13 @@ body{background:var(--bg);font-family:'Pretendard','Noto Sans KR',-apple-system,
 
 /* PnL */
 .pnl-kpi{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
-.pnl-row{display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #F0F2F5}
+.pnl-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #F0F2F5}
 .pnl-row.bold{border-bottom-color:var(--border);font-weight:700}
 .pnl-row.highlight{background:rgba(16,185,129,.03)}
+.pnl-input{border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;font-family:inherit;text-align:right;width:155px;font-variant-numeric:tabular-nums;background:#FAFBFE;transition:all .15s;color:var(--text)}
+.pnl-input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-soft)}
+.pnl-save-msg{font-size:11px;color:var(--green);font-weight:600;opacity:0;transition:opacity .3s}
+.pnl-save-msg.show{opacity:1}
 
 /* Two columns */
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
@@ -289,7 +293,7 @@ body{background:var(--bg);font-family:'Pretendard','Noto Sans KR',-apple-system,
     <div class="pnl-kpi anim" id="pnlKpis"></div>
     <div class="card anim" style="animation-delay:.1s">
       <div class="card-title"><span class="icon">📋</span><span class="txt">손익계산서</span></div>
-      <div class="card-sub">2026년 1월 · 메일파싱 + OCR 자동입력</div>
+      <div class="card-sub">2026년 1월 · 수기 입력 <span class="pnl-save-msg" id="pnlSaveMsg">저장되었습니다</span></div>
       <div id="pnlTable"></div>
     </div>
   </div>
@@ -655,39 +659,124 @@ function renderChannel() {
 }
 
 /* ═══ PNL ═══ */
-function renderPnl() {
-  document.getElementById('pnlKpis').innerHTML = [
-    {l:"매출총액",v:KPI.grossSales,icon:"💰",c:"var(--text)"},
-    {l:"순매출",v:KPI.netSales,icon:"📊",c:"var(--blue)",sub:"93.0%"},
-    {l:"실제 입금액",v:KPI.actualDeposit,icon:"🏦",c:"var(--green)",sub:"64.2%"},
-    {l:"당기순이익",v:KPI.netIncome,icon:"📈",c:"var(--accent)",sub:"44.6%"},
-    {l:"적립 후 잔액",v:KPI.balance,icon:"💵",c:"var(--purple)",sub:"28.8%"},
-  ].map(k=>`<div class="card kpi"><div class="bar" style="background:${k.c}"></div><div class="label"><span>${k.icon}</span>${k.l}</div><div class="value" style="font-size:18px;color:${k.c}">${fmtW(k.v)}</div>${k.sub?'<span style="font-size:11px;color:var(--text-dim)">매출 대비 '+k.sub+'</span>':''}</div>`).join('');
+let pnlRendered = false;
 
-  const rows = [
-    {l:"매출총액",v:KPI.grossSales,bold:true},
-    {l:"할인/쿠폰",v:KPI.discount,neg:true},
-    {l:"순매출",v:KPI.netSales,bold:true,hl:"var(--blue)"},
-    {l:"배달수수료",v:KPI.deliveryFee,neg:true},
-    {l:"배달대행비",v:KPI.deliveryAgent,neg:true},
-    {l:"원재료(식자재+부자재)",v:KPI.rawMaterial,neg:true,auto:true},
-    {l:"매출총이익",v:KPI.grossProfit,bold:true,hl:"var(--green)"},
-    {l:"판매관리비",v:KPI.sgna,neg:true},
-    {l:"영업이익",v:KPI.operatingProfit,bold:true,hl:"var(--accent)"},
-    {l:"영업외비용",v:KPI.nonOpex,neg:true},
-    {l:"당기순이익",v:KPI.netIncome,bold:true,hl:"var(--green)",big:true},
-    {l:"적립(세금+퇴직금)",v:KPI.reserve,neg:true},
-    {l:"적립 후 잔액",v:KPI.balance,bold:true,hl:"var(--purple)"},
+function pnlRecalc() {
+  const g = k => parseInt(document.getElementById('pnl-'+k).value.replace(/,/g,''))||0;
+  const grossSales = g('grossSales');
+  const discount = g('discount');
+  const deliveryFee = g('deliveryFee');
+  const deliveryAgent = g('deliveryAgent');
+  const rawMaterial = g('rawMaterial');
+  const sgna = g('sgna');
+  const nonOpex = g('nonOpex');
+  const reserve = g('reserve');
+
+  const netSales = grossSales - discount;
+  const grossProfit = netSales - deliveryFee - deliveryAgent - rawMaterial;
+  const operatingProfit = grossProfit - sgna;
+  const netIncome = operatingProfit - nonOpex;
+  const balance = netIncome - reserve;
+
+  KPI.grossSales=grossSales; KPI.discount=discount; KPI.netSales=netSales;
+  KPI.deliveryFee=deliveryFee; KPI.deliveryAgent=deliveryAgent; KPI.rawMaterial=rawMaterial;
+  KPI.grossProfit=grossProfit; KPI.sgna=sgna; KPI.operatingProfit=operatingProfit;
+  KPI.nonOpex=nonOpex; KPI.netIncome=netIncome; KPI.reserve=reserve; KPI.balance=balance;
+
+  document.getElementById('pnl-netSales').textContent = fmtW(netSales);
+  document.getElementById('pnl-grossProfit').textContent = fmtW(grossProfit);
+  document.getElementById('pnl-operatingProfit').textContent = fmtW(operatingProfit);
+  document.getElementById('pnl-netIncome').textContent = fmtW(netIncome);
+  document.getElementById('pnl-balance').textContent = fmtW(balance);
+
+  document.getElementById('pnl-netSales-pct').textContent = pct(netSales,grossSales);
+  document.getElementById('pnl-grossProfit-pct').textContent = pct(grossProfit,grossSales);
+  document.getElementById('pnl-operatingProfit-pct').textContent = pct(operatingProfit,grossSales);
+  document.getElementById('pnl-netIncome-pct').textContent = pct(netIncome,grossSales);
+  document.getElementById('pnl-balance-pct').textContent = pct(balance,grossSales);
+  document.getElementById('pnl-discount-pct').textContent = pct(discount,grossSales);
+  document.getElementById('pnl-deliveryFee-pct').textContent = pct(deliveryFee,grossSales);
+  document.getElementById('pnl-deliveryAgent-pct').textContent = pct(deliveryAgent,grossSales);
+  document.getElementById('pnl-rawMaterial-pct').textContent = pct(rawMaterial,grossSales);
+  document.getElementById('pnl-sgna-pct').textContent = pct(sgna,grossSales);
+  document.getElementById('pnl-nonOpex-pct').textContent = pct(nonOpex,grossSales);
+  document.getElementById('pnl-reserve-pct').textContent = pct(reserve,grossSales);
+  document.getElementById('pnl-grossSales-pct').textContent = '100%';
+
+  updatePnlKpis();
+
+  try{localStorage.setItem('pnlData',JSON.stringify({grossSales,discount,deliveryFee,deliveryAgent,rawMaterial,sgna,nonOpex,reserve}));}catch(e){}
+  const msg=document.getElementById('pnlSaveMsg');
+  msg.classList.add('show');
+  setTimeout(()=>msg.classList.remove('show'),1500);
+}
+
+function updatePnlKpis() {
+  const items = [
+    {l:"매출총액",v:KPI.grossSales,icon:"💰",c:"var(--text)"},
+    {l:"순매출",v:KPI.netSales,icon:"📊",c:"var(--blue)",sub:true},
+    {l:"매출총이익",v:KPI.grossProfit,icon:"🏦",c:"var(--green)",sub:true},
+    {l:"당기순이익",v:KPI.netIncome,icon:"📈",c:"var(--accent)",sub:true},
+    {l:"적립 후 잔액",v:KPI.balance,icon:"💵",c:"var(--purple)",sub:true},
   ];
-  let html = '';
-  rows.forEach(r => {
-    const cls = (r.bold?'bold ':'')+(r.big?'highlight':'');
-    html += `<div class="pnl-row ${cls}">
-      <span>${r.neg?'<span style="color:var(--red);font-size:10px">−</span> ':''}${r.l}${r.auto?' <span style="font-size:8.5px;background:var(--green-soft);color:var(--green);padding:1px 5px;border-radius:3px;font-weight:700">자동</span>':''}</span>
-      <span style="display:flex;gap:30px"><span style="color:${r.hl||'var(--text)'};font-variant-numeric:tabular-nums;${r.big?'font-size:14px':''}">${fmtW(r.v)}</span><span style="color:var(--text-dim);font-size:11.5px;min-width:50px;text-align:right">${pct(r.v,KPI.grossSales)}</span></span>
-    </div>`;
-  });
-  document.getElementById('pnlTable').innerHTML = html;
+  document.getElementById('pnlKpis').innerHTML = items.map(k=>`<div class="card kpi"><div class="bar" style="background:${k.c}"></div><div class="label"><span>${k.icon}</span>${k.l}</div><div class="value" style="font-size:18px;color:${k.c}">${fmtW(k.v)}</div>${k.sub?'<span style="font-size:11px;color:var(--text-dim)">매출 대비 '+pct(k.v,KPI.grossSales)+'</span>':''}</div>`).join('');
+}
+
+function fmtInput(v){return v.toLocaleString();}
+function onPnlInput(e){
+  const raw=e.target.value.replace(/[^0-9]/g,'');
+  const num=parseInt(raw)||0;
+  const pos=e.target.selectionStart;
+  const oldLen=e.target.value.length;
+  e.target.value=num.toLocaleString();
+  const newLen=e.target.value.length;
+  e.target.setSelectionRange(pos+newLen-oldLen,pos+newLen-oldLen);
+  pnlRecalc();
+}
+
+function renderPnl() {
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem('pnlData'));}catch(e){}
+  if(saved){
+    KPI.grossSales=saved.grossSales; KPI.discount=saved.discount;
+    KPI.deliveryFee=saved.deliveryFee; KPI.deliveryAgent=saved.deliveryAgent;
+    KPI.rawMaterial=saved.rawMaterial; KPI.sgna=saved.sgna;
+    KPI.nonOpex=saved.nonOpex; KPI.reserve=saved.reserve;
+    KPI.netSales=KPI.grossSales-KPI.discount;
+    KPI.grossProfit=KPI.netSales-KPI.deliveryFee-KPI.deliveryAgent-KPI.rawMaterial;
+    KPI.operatingProfit=KPI.grossProfit-KPI.sgna;
+    KPI.netIncome=KPI.operatingProfit-KPI.nonOpex;
+    KPI.balance=KPI.netIncome-KPI.reserve;
+  }
+
+  updatePnlKpis();
+
+  const inputRow = (label, key, neg) => `<div class="pnl-row">
+    <span>${neg?'<span style="color:var(--red);font-size:10px">−</span> ':''}${label} <span style="font-size:8.5px;background:var(--blue-soft);color:var(--blue);padding:1px 5px;border-radius:3px;font-weight:700">입력</span></span>
+    <span style="display:flex;align-items:center;gap:12px"><input type="text" id="pnl-${key}" class="pnl-input" value="${fmtInput(KPI[key])}" oninput="onPnlInput(event)"><span id="pnl-${key}-pct" style="color:var(--text-dim);font-size:11.5px;min-width:50px;text-align:right">${pct(KPI[key],KPI.grossSales)}</span></span>
+  </div>`;
+
+  const calcRow = (label, key, hl, bold, big) => `<div class="pnl-row ${bold?'bold ':''} ${big?'highlight':''}">
+    <span>${label} <span style="font-size:8.5px;background:var(--green-soft);color:var(--green);padding:1px 5px;border-radius:3px;font-weight:700">자동</span></span>
+    <span style="display:flex;gap:30px"><span id="pnl-${key}" style="color:${hl||'var(--text)'};font-variant-numeric:tabular-nums;${big?'font-size:14px':''}">${fmtW(KPI[key])}</span><span id="pnl-${key}-pct" style="color:var(--text-dim);font-size:11.5px;min-width:50px;text-align:right">${pct(KPI[key],KPI.grossSales)}</span></span>
+  </div>`;
+
+  document.getElementById('pnlTable').innerHTML =
+    inputRow("매출총액","grossSales",false)+
+    inputRow("할인/쿠폰","discount",true)+
+    calcRow("순매출","netSales","var(--blue)",true,false)+
+    inputRow("배달수수료","deliveryFee",true)+
+    inputRow("배달대행비","deliveryAgent",true)+
+    inputRow("원재료(식자재+부자재)","rawMaterial",true)+
+    calcRow("매출총이익","grossProfit","var(--green)",true,false)+
+    inputRow("판매관리비","sgna",true)+
+    calcRow("영업이익","operatingProfit","var(--accent)",true,false)+
+    inputRow("영업외비용","nonOpex",true)+
+    calcRow("당기순이익","netIncome","var(--green)",true,true)+
+    inputRow("적립(세금+퇴직금)","reserve",true)+
+    calcRow("적립 후 잔액","balance","var(--purple)",true,false);
+
+  pnlRendered = true;
 }
 </script>
 </body>
